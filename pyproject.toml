@@ -30,6 +30,7 @@ dependencies = [
     "openpyxl",
     "faker",
     "msal",
+    "msal-extensions",
 ]
 
 [project.scripts]
