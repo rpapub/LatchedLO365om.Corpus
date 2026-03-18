@@ -36,10 +36,12 @@ def cmd_auth(args):
 
     if args.auth == "device":
         print("Acquiring token via device code flow ...")
-        token = acquire_token_device_flow(args.client_id, args.tenant_id)
+        token = acquire_token_device_flow(args.client_id, args.tenant_id,
+                                          insecure=args.insecure)
     else:
         print("Acquiring token interactively ...")
-        token = acquire_token_interactive(args.client_id, args.tenant_id)
+        token = acquire_token_interactive(args.client_id, args.tenant_id,
+                                          insecure=args.insecure)
 
     if args.output:
         Path(args.output).write_text(token, encoding="utf-8")
@@ -173,6 +175,9 @@ def _add_auth_args(parser):
                         help="App registration client ID (auth=interactive|device)")
     parser.add_argument("--tenant-id", default=os.environ.get("CORPUS_TENANT_ID", "consumers"),
                         help="Tenant ID or 'consumers' (default: consumers)")
+    parser.add_argument("--insecure",  action="store_true",
+                        help="Store token cache as plaintext — use only when platform "
+                             "keyring is unavailable (e.g. WSL without D-Bus)")
 
 
 def _resolve_token(args) -> str:
@@ -183,10 +188,12 @@ def _resolve_token(args) -> str:
             sys.exit(1)
         if args.auth == "device":
             print("Acquiring token via device code flow ...")
-            return acquire_token_device_flow(args.client_id, args.tenant_id)
+            return acquire_token_device_flow(args.client_id, args.tenant_id,
+                                             insecure=args.insecure)
         else:
             print("Acquiring token interactively ...")
-            return acquire_token_interactive(args.client_id, args.tenant_id)
+            return acquire_token_interactive(args.client_id, args.tenant_id,
+                                             insecure=args.insecure)
     elif args.token:
         return args.token
     else:
@@ -214,6 +221,9 @@ def main():
                         help="Tenant ID or 'consumers'")
     p_auth.add_argument("--output", default=None,
                         help="Write token to file instead of stdout")
+    p_auth.add_argument("--insecure", action="store_true",
+                        help="Store token cache as plaintext — use only when platform "
+                             "keyring is unavailable (e.g. WSL without D-Bus)")
 
     # setup
     p_setup = sub.add_parser("setup", help="Create corpus messages and write manifest")

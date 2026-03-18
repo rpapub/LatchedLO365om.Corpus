@@ -29,7 +29,10 @@ uvx --version
 
 ### Linux only — system libraries required
 
-The token cache uses libsecret for encryption on Linux. See [Linux prerequisites](#linux-prerequisites) at the end of this document.
+The token cache uses libsecret for encryption on Linux. Without a keyring daemon
+(e.g. plain WSL), the token is not cached and the OAuth flow runs on every command.
+To persist the token without encryption, use `--insecure`. See [Linux prerequisites](#linux-prerequisites)
+at the end of this document for the required system packages.
 
 > On macOS and Windows no extra system libraries are needed.
 

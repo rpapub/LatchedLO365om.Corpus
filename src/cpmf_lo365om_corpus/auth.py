@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import msal
-from msal_extensions import build_encrypted_persistence, PersistedTokenCache
+from msal_extensions import build_encrypted_persistence, FilePersistence, PersistedTokenCache
 
 SCOPES = ["https://graph.microsoft.com/Mail.ReadWrite"]
 
@@ -37,15 +37,37 @@ def _cache_path() -> Path:
     return base / "CPMForge" / _LIBRARY_NAME / "TokenCache" / "token_cache.bin"
 
 
-def _make_cache() -> PersistedTokenCache:
-    """Build an encrypted, persisted MSAL token cache."""
+def _make_cache(insecure: bool = False) -> msal.SerializableTokenCache | PersistedTokenCache:
+    """Build a persisted MSAL token cache.
+
+    insecure=False (default):
+      - Attempts encrypted cache via DPAPI / Keychain / libsecret.
+      - If encryption is unavailable (e.g. WSL without D-Bus), returns an
+        in-memory-only cache — token is NOT persisted; OAuth flow runs every time.
+    insecure=True:
+      - Plaintext FilePersistence — explicitly opt-in for headless/dev environments.
+      - Prints a warning.
+    """
     path = _cache_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    persistence = build_encrypted_persistence(str(path))
-    return PersistedTokenCache(persistence)
+
+    if insecure:
+        print("WARNING: token cache stored as plaintext (--insecure). "
+              "Do not use in production.", flush=True)
+        return PersistedTokenCache(FilePersistence(str(path)))
+
+    try:
+        return PersistedTokenCache(build_encrypted_persistence(str(path)))
+    except Exception:
+        print("WARNING: encrypted token cache unavailable on this platform "
+              "(no keyring / D-Bus). Token will NOT be cached — "
+              "OAuth flow will run on every command. "
+              "Use --insecure to persist without encryption.", flush=True)
+        return msal.SerializableTokenCache()  # in-memory only
 
 
-def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> str:
+def acquire_token_interactive(client_id: str, tenant_id: str = "consumers",
+                              insecure: bool = False) -> str:
     """
     Acquire a Graph API bearer token via MSAL interactive browser flow.
 
@@ -60,7 +82,7 @@ def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> s
     Returns:
         Bearer token string.
     """
-    cache = _make_cache()
+    cache = _make_cache(insecure=insecure)
 
     app = msal.PublicClientApplication(
         client_id=client_id,
@@ -86,7 +108,8 @@ def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> s
     return result["access_token"]
 
 
-def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers") -> str:
+def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers",
+                              insecure: bool = False) -> str:
     """
     Acquire a Graph API bearer token via MSAL device code flow.
 
@@ -103,7 +126,7 @@ def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers") -> s
     Returns:
         Bearer token string.
     """
-    cache = _make_cache()
+    cache = _make_cache(insecure=insecure)
 
     app = msal.PublicClientApplication(
         client_id=client_id,
