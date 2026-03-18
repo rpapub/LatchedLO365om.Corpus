@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cpmf-lo365om-corpus"
-version = "0.1.0"
+dynamic = ["version"]
 description = "LatentLithium corpus setup — test fixture creation for LatchedLO365om"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,6 +21,9 @@ cpmf-lo365om-corpus = "cpmf_lo365om_corpus.cli:main"
 
 [project.optional-dependencies]
 tests = ["pytest", "pytest-cov"]
+
+[tool.hatch.version]
+path = "src/cpmf_lo365om_corpus/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cpmf_lo365om_corpus"]
