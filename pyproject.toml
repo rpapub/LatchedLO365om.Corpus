@@ -29,6 +29,7 @@ dependencies = [
     "fpdf2",
     "openpyxl",
     "faker",
+    "jsonschema",
     "msal",
     "msal-extensions",
     "PyGObject; sys_platform == 'linux'",

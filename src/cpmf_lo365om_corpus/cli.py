@@ -24,6 +24,7 @@ from .auth import acquire_token_interactive, acquire_token_device_flow
 from .context import make_run_context, make_context
 from .graph import make_client, ensure_folder, clear_folder, create_message, write_extension
 from .manifest import build_manifest
+from .validators import validate_scenario
 
 
 # ── auth ───────────────────────────────────────────────────────────────────────
@@ -58,6 +59,8 @@ def cmd_setup(args):
     print(f"Loading scenario: {corpus_path}")
     with corpus_path.open(encoding="utf-8") as f:
         spec = yaml.safe_load(f)
+
+    validate_scenario(spec, path=str(corpus_path))
 
     run_id, timestamp, date = make_run_context()
     print(f"Run ID:  {run_id}")
