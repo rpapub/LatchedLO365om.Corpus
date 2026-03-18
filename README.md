@@ -31,8 +31,8 @@ uvx --version
 
 The token cache uses libsecret for encryption on Linux. Without a keyring daemon
 (e.g. plain WSL), the token is not cached and the OAuth flow runs on every command.
-To persist the token without encryption, use `--insecure`. See [Linux prerequisites](#linux-prerequisites)
-at the end of this document for the required system packages.
+See [Linux prerequisites](#linux-prerequisites) at the end of this document for the
+required system packages.
 
 > On macOS and Windows no extra system libraries are needed.
 
@@ -51,7 +51,7 @@ Use a **dedicated test mailbox** — the `setup` command clears the target folde
 1. Go to [portal.azure.com](https://portal.azure.com) → **Entra ID** → **App registrations** → **New registration**
 2. Name it anything (e.g. `corpus-cli`)
 3. Under **Redirect URIs** → add `http://localhost` (platform: **Public client / native**)
-4. Under **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated** → `Mail.ReadWrite`
+4. Under **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated** → `Mail.Read` and `Mail.ReadWrite`
 5. If your tenant requires it: **Grant admin consent**
 6. Copy the **Application (client) ID** — you will need it below
 
@@ -82,6 +82,7 @@ $env:CORPUS_MAILBOX   = "you@outlook.com"    # mailbox where fixtures are create
 ### 1 — Authenticate
 
 Opens a browser window for interactive sign-in and caches the token locally.
+Acquires `Mail.Read` scope — read-only, safe to run at any time.
 
 ```powershell
 uvx cpmf-lo365om-corpus auth
@@ -91,6 +92,14 @@ uvx cpmf-lo365om-corpus auth
 
 Reads a scenario yaml, creates fixture messages in the mailbox, and writes
 `corpus.json` — the manifest consumed by LatentLithium test cases.
+
+`setup` requires `Mail.ReadWrite` and will prompt you to confirm by typing
+the mailbox address before proceeding:
+
+```
+This operation will modify the mailbox: you@outlook.com
+Type the mailbox address to confirm: _
+```
 
 ```powershell
 uvx cpmf-lo365om-corpus setup `
@@ -108,6 +117,7 @@ Open LatentLithium in UiPath Studio and point it at your `corpus.json`.
 ### 4 — Tear down
 
 Deletes all messages created during `setup` using the IDs recorded in `corpus.json`.
+Also requires `Mail.ReadWrite` and the same mailbox confirmation.
 
 ```powershell
 uvx cpmf-lo365om-corpus teardown --manifest corpus.json
