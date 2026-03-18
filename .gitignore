@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+uv.lock
+
+# Generated corpus manifests — contain live ImmutableIds
+corpus*.json
+corpus-*.json
+
+# MSAL token cache
+token_cache.json
+/tmp/corpus_*.txt

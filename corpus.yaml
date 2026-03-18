@@ -1,0 +1,317 @@
+# Tests/Corpus/corpus.yaml
+# Scenario specification for the LatentLithium test corpus.
+# Processed by cpmf-lo365om-corpus (python -m cpmf_lo365om_corpus.cli setup).
+# No credentials — environment resolved from CORPUS_TOKEN / CORPUS_MAILBOX at runtime.
+# No live IDs — this file is safe to commit.
+
+scenario:
+  name: "mail-basic"
+  workload: mail
+
+fixtures:
+  mail:
+
+    - label: MSG_BASIC
+      subject: "LL [{run_id_short}] Basic"
+      body:
+        contentType: text
+        content: "Run: {run_id} / {timestamp}"
+      importance: normal
+      isRead: false
+
+    - label: MSG_HTML
+      subject: "LL [{run_id_short}] HTML Body"
+      body:
+        contentType: html
+        content: "<h1>{label}</h1><p>Run: {run_id}<br/>{timestamp}</p>"
+      importance: normal
+      isRead: false
+
+    - label: MSG_HIGH_IMPORTANCE
+      subject: "LL [{run_id_short}] High Importance"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      importance: high
+      isRead: false
+
+    - label: MSG_ALREADY_READ
+      subject: "LL [{run_id_short}] Pre-read"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      importance: normal
+      isRead: true
+
+    - label: MSG_FORM_BASIC
+      subject: "LL [{run_id_short}] Form Submission"
+      body:
+        contentType: text
+        sections:
+          - type: header
+            content: "Please process the following request:"
+          - type: structured
+            separator: ": "
+            fields:
+              - key: "Name"
+                value: "Alice Smith"
+              - key: "E-mail Address"
+                value: "alice@example.com"
+              - key: "Request Type"
+                value: "Support"
+              - key: "Unknown Field"
+                value: "noise"
+          - type: footer
+            content: "\nThank you,\nAlice"
+      importance: normal
+      isRead: false
+
+    - label: MSG_FOR_EXTENSION
+      subject: "LL [{run_id_short}] Extension Target"
+      body:
+        contentType: text
+        content: "Clean target for Write/ReadMessageExtension. Run: {run_id}"
+      importance: normal
+      isRead: false
+      extension:
+        name: "net.cprima.rpapub.latentlithium.testspec"
+        act:
+          action: writeExtension
+          extensionName: "net.cprima.rpapub.cpmf.o365.extension"
+          payload:
+            status: Pending
+            correlationId: "corpus-{run_id_short}"
+
+    - label: MSG_FOR_MOVE
+      subject: "LL [{run_id_short}] Move Target"
+      body:
+        contentType: text
+        content: "Consumed by MoveMailMessage tests. Run: {run_id}"
+      importance: normal
+      isRead: false
+      extension:
+        name: "net.cprima.rpapub.latentlithium.testspec"
+        act:
+          action: move
+          targetFolder: "TestCorpus/Mail/Processed"
+
+    - label: MSG_WITH_TXT
+      subject: "LL [{run_id_short}] Text Attachment"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      attachments:
+        - strategy: generate_text
+          name: "notes_{date}.txt"
+          content: |
+            Label:     {label}
+            Run:       {run_id}
+            Timestamp: {timestamp}
+
+    - label: MSG_WITH_PDF
+      subject: "LL [{run_id_short}] PDF Attachment"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      attachments:
+        - strategy: generate_pdf
+          name: "report_{date}.pdf"
+          pages:
+            - title: "{label}"
+              body: "Run: {run_id}\nTimestamp: {timestamp}"
+            - title: "Page 2"
+              body: "Index: {index}"
+
+    - label: MSG_WITH_XLSX
+      subject: "LL [{run_id_short}] Excel Attachment"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      attachments:
+        - strategy: generate_xlsx
+          name: "data_{date}.xlsx"
+          sheets:
+            - name: Meta
+              rows:
+                - [RunId,     "{run_id}"]
+                - [Label,     "{label}"]
+                - [Timestamp, "{timestamp}"]
+            - name: Data
+              headers: [RowIndex, Label, RunId]
+              row_template: ["{row_index}", "{label}", "{run_id}"]
+              row_count: 5
+
+    - label: MSG_MULTI_ATTACH
+      subject: "LL [{run_id_short}] Multi Attachment"
+      body:
+        contentType: html
+        content: "<p>{label}</p><p><small>Run: {run_id} / {timestamp}</small></p>"
+      attachments:
+        - strategy: generate_text
+          name: "summary_{date}.txt"
+          content: "{label} / {run_id} / {timestamp}"
+        - strategy: generate_pdf
+          name: "brief_{date}.pdf"
+          pages:
+            - title: "{label}"
+              body: "Run: {run_id}"
+        - strategy: generate_xlsx
+          name: "log_{date}.xlsx"
+          sheets:
+            - name: Log
+              headers: [Label, RunId, Timestamp]
+              row_template: ["{label}", "{run_id}", "{timestamp}"]
+              row_count: 1
+
+    - label: MSG_LARGE_ATTACH
+      subject: "LL [{run_id_short}] Large Attachment"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      attachments:
+        - strategy: random_bytes
+          name: "payload_{run_id_short}.bin"
+          size_kb: 512
+
+    - label: MSG_NO_ATTACHMENTS
+      subject: "LL [{run_id_short}] No Attachments"
+      body:
+        contentType: text
+        content: "Consumed by SaveAllAttachments no-attachments edge case. Run: {run_id}"
+      importance: normal
+      isRead: false
+
+    - label: MSG_FIXTURE
+      subject: "LL [{run_id_short}] Fixture File"
+      body:
+        contentType: text
+        content: "Run: {run_id}"
+      attachments:
+        - strategy: fixture_file
+          name: "logo.png"
+          path: "Tests/Corpus/fixtures/logo.png"
+
+  files: []  # future: SharePoint
+
+expected:
+  MSG_BASIC:
+    retrieval:
+      isRead: false
+      importance: normal
+    eml:
+      fileCount: 1
+      minSizeBytes: 100
+
+  MSG_HTML:
+    retrieval:
+      isRead: false
+      importance: normal
+
+  MSG_HIGH_IMPORTANCE:
+    retrieval:
+      isRead: false
+      importance: high
+
+  MSG_ALREADY_READ:
+    retrieval:
+      isRead: true
+      importance: normal
+
+  MSG_FORM_BASIC:
+    retrieval:
+      isRead: false
+      importance: normal
+    bodyExtraction:
+      values:
+        emailaddress: "alice@example.com"
+        requesttype: "Support"
+      unmatchedFields: ["unknownfield"]
+      missingRequiredKeys: []
+    eml:
+      fileCount: 1
+      minSizeBytes: 512
+
+  MSG_FOR_EXTENSION:
+    retrieval:
+      isRead: false
+
+  MSG_FOR_MOVE:
+    retrieval:
+      isRead: false
+    move_to_processed:
+      targetFolder: "TestCorpus/Mail/Processed"
+
+  MSG_WITH_TXT:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+      minSizeBytes: 10
+    eml:
+      fileCount: 1
+      minSizeBytes: 512
+
+  MSG_WITH_PDF:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+      minSizeBytes: 512
+    eml:
+      fileCount: 1
+      minSizeBytes: 512
+
+  MSG_WITH_XLSX:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+      minSizeBytes: 512
+    eml:
+      fileCount: 1
+      minSizeBytes: 512
+
+  MSG_MULTI_ATTACH:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 3
+      minSizeBytes: 512
+    eml:
+      fileCount: 1
+      minSizeBytes: 512
+
+  MSG_LARGE_ATTACH:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+      minSizeBytes: 524288  # 512 KB
+
+  MSG_NO_ATTACHMENTS:
+    retrieval:
+      hasAttachments: false
+    attachments:
+      count: 0
+
+  MSG_FIXTURE:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+
+execution:
+  setup:
+    ensure_folders:
+      - "TestCorpus/Mail"
+    idempotent: true
+  teardown:
+    policy: delete
+
+tests:
+  - Mail_GetMessages
+  - Mail_ExtractBodyFields
+  - Mail_SaveAllAsEml
+  - Mail_SaveAllAttachments
+  - Mail_MoveMessage
+  - Mail_WriteReadMessageExtension
