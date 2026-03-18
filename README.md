@@ -27,15 +27,9 @@ After installation, restart your terminal and verify:
 uvx --version
 ```
 
-### Linux only — libsecret system libraries
+### Linux only — system libraries required
 
-The token cache is encrypted using the platform keyring. On Linux this requires
-[libsecret](https://wiki.gnome.org/Projects/Libsecret) and its GObject bindings.
-Install them once before running any command:
-
-```bash
-sudo apt install libgirepository1.0-dev gir1.2-secret-1
-```
+The token cache uses libsecret for encryption on Linux. See [Linux prerequisites](#linux-prerequisites) at the end of this document.
 
 > On macOS and Windows no extra system libraries are needed.
 
@@ -135,3 +129,22 @@ All flags can be replaced by the corresponding environment variable (see table a
 Corpus messages are defined in a scenario yaml file.
 See [`corpus.schema.yaml`](corpus.schema.yaml) for the full schema and
 [`scenarios/mail-demo.yaml`](scenarios/mail-demo.yaml) for a working example.
+
+---
+
+## Linux prerequisites
+
+The token cache is encrypted using [libsecret](https://wiki.gnome.org/Projects/Libsecret)
+via PyGObject. The following system libraries must be installed before running any command.
+
+Tested on Ubuntu 24.04 (including WSL2):
+
+```bash
+sudo apt update
+sudo apt install libgirepository1.0-dev gir1.2-secret-1 python3-cairo-dev
+sudo apt install libcairo2-dev
+sudo apt install libgirepository-2.0-dev
+```
+
+These are one-time system-level installs. After installing, `uvx` will compile and
+cache PyGObject automatically on first run.
