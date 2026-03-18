@@ -165,8 +165,8 @@ def cmd_teardown(args):
 # ── shared argument helpers ────────────────────────────────────────────────────
 
 def _add_auth_args(parser):
-    parser.add_argument("--auth",      default="token", choices=["token", "interactive", "device"],
-                        help="Auth mode: token | interactive | device (WSL/headless)")
+    parser.add_argument("--auth",      default="interactive", choices=["token", "interactive", "device"],
+                        help="Auth mode: interactive (default) | token | device (WSL/headless)")
     parser.add_argument("--token",     default=os.environ.get("CORPUS_TOKEN"),
                         help="Bearer token (auth=token)")
     parser.add_argument("--client-id", default=os.environ.get("CORPUS_CLIENT_ID"),
@@ -190,7 +190,7 @@ def _resolve_token(args) -> str:
     elif args.token:
         return args.token
     else:
-        print("ERROR: --token or CORPUS_TOKEN is required (or use --auth device|interactive)",
+        print("ERROR: --client-id or CORPUS_CLIENT_ID is required for interactive auth",
               file=sys.stderr)
         sys.exit(1)
 
@@ -206,8 +206,8 @@ def main():
 
     # auth
     p_auth = sub.add_parser("auth", help="Acquire and cache a bearer token")
-    p_auth.add_argument("--auth", default="device", choices=["interactive", "device"],
-                        help="Auth mode: device (default, WSL/headless) | interactive")
+    p_auth.add_argument("--auth", default="interactive", choices=["interactive", "device"],
+                        help="Auth mode: interactive (default) | device (WSL/headless)")
     p_auth.add_argument("--client-id", default=os.environ.get("CORPUS_CLIENT_ID"),
                         help="App registration client ID")
     p_auth.add_argument("--tenant-id", default=os.environ.get("CORPUS_TENANT_ID", "consumers"),
