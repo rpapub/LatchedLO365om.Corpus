@@ -7,10 +7,13 @@ build/
 .venv/
 uv.lock
 
-# Generated corpus manifests — contain live ImmutableIds
-corpus*.json
-corpus-*.json
+# Generated corpus manifests — contain live ImmutableIds, never commit
+*.json
+!fixtures/**/*.json
+
+# Environment files — contain mailbox addresses, never commit
+.env
+environments/*.env
 
 # MSAL token cache
 token_cache.json
-/tmp/corpus_*.txt

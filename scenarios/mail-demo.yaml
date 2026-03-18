@@ -1,0 +1,93 @@
+# scenarios/mail-demo.yaml
+# Reference scenario — demonstrates all supported fixture types.
+# Used as a usage example for cpmf-lo365om-corpus.
+# Run:
+#   python -m cpmf_lo365om_corpus.cli setup \
+#     --corpus scenarios/mail-demo.yaml \
+#     --output corpus-demo.json \
+#     --auth device \
+#     --client-id <your-app-registration-id> \
+#     --mailbox <your-mailbox@example.com>
+
+scenario:
+  name: "demo"
+  workload: mail
+
+fixtures:
+  mail:
+    - label: MSG_DEMO_BASIC
+      subject: "LL Demo [{run_id_short}] Basic"
+      body:
+        contentType: text
+        content: "Demo run: {run_id} / {timestamp}"
+      importance: normal
+      isRead: false
+
+    - label: MSG_DEMO_FORM
+      subject: "LL Demo [{run_id_short}] Form"
+      body:
+        contentType: text
+        sections:
+          - type: header
+            content: "Please process the following request:"
+          - type: structured
+            separator: ": "
+            fields:
+              - key: "Name"
+                value: "Alice Smith"
+              - key: "E-mail Address"
+                value: "alice@example.com"
+              - key: "Request Type"
+                value: "Support"
+          - type: footer
+            content: "\nThank you,\nAlice"
+      importance: normal
+      isRead: false
+
+    - label: MSG_DEMO_ATTACH
+      subject: "LL Demo [{run_id_short}] With PDF"
+      body:
+        contentType: text
+        content: "See attached. Run: {run_id}"
+      importance: normal
+      isRead: false
+      attachments:
+        - strategy: generate_pdf
+          name: "demo_{date}.pdf"
+          pages:
+            - title: "{label}"
+              body: "Run: {run_id}\nTimestamp: {timestamp}"
+
+  files: []
+
+expected:
+  MSG_DEMO_BASIC:
+    retrieval:
+      isRead: false
+      importance: normal
+  MSG_DEMO_FORM:
+    retrieval:
+      isRead: false
+    bodyExtraction:
+      values:
+        emailaddress: "alice@example.com"
+        requesttype: "Support"
+      unmatchedFields: []
+      missingRequiredKeys: []
+  MSG_DEMO_ATTACH:
+    retrieval:
+      hasAttachments: true
+    attachments:
+      count: 1
+      minSizeBytes: 512
+
+execution:
+  setup:
+    ensure_folders:
+      - "CorpusDemo"
+    idempotent: true
+  teardown:
+    policy: delete
+
+tests:
+  - Mail_GetMessages
