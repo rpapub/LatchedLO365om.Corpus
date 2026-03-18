@@ -27,6 +27,18 @@ After installation, restart your terminal and verify:
 uvx --version
 ```
 
+### Linux only — libsecret system libraries
+
+The token cache is encrypted using the platform keyring. On Linux this requires
+[libsecret](https://wiki.gnome.org/Projects/Libsecret) and its GObject bindings.
+Install them once before running any command:
+
+```bash
+sudo apt install libgirepository1.0-dev gir1.2-secret-1
+```
+
+> On macOS and Windows no extra system libraries are needed.
+
 ---
 
 ## Prerequisites

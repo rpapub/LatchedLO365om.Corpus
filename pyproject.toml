@@ -31,6 +31,7 @@ dependencies = [
     "faker",
     "msal",
     "msal-extensions",
+    "PyGObject; sys_platform == 'linux'",
 ]
 
 [project.scripts]
