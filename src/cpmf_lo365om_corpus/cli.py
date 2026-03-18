@@ -1,12 +1,15 @@
 """CLI entry point for cpmf-lo365om-corpus.
 
 Usage:
-    python -m cpmf_lo365om_corpus.cli setup   [options]
-    python -m cpmf_lo365om_corpus.cli teardown [options]
+    python -m cpmf_lo365om_corpus.cli auth     [options]   # acquire + cache token
+    python -m cpmf_lo365om_corpus.cli setup    [options]   # create corpus messages
+    python -m cpmf_lo365om_corpus.cli teardown [options]   # delete corpus messages
 
 Environment variables:
-    CORPUS_TOKEN    Bearer token (alternative to --token)
-    CORPUS_MAILBOX  Mailbox email (alternative to --mailbox)
+    CORPUS_TOKEN      Bearer token (auth=token)
+    CORPUS_CLIENT_ID  App registration client ID (auth=device|interactive)
+    CORPUS_TENANT_ID  Tenant ID or 'consumers' (default: consumers)
+    CORPUS_MAILBOX    Mailbox email
 """
 
 import argparse
@@ -23,12 +26,34 @@ from .graph import make_client, ensure_folder, clear_folder, create_message, wri
 from .manifest import build_manifest
 
 
+# ── auth ───────────────────────────────────────────────────────────────────────
+
+def cmd_auth(args):
+    """Acquire and cache a token. Prints the token to stdout."""
+    if not args.client_id:
+        print("ERROR: --client-id or CORPUS_CLIENT_ID is required", file=sys.stderr)
+        sys.exit(1)
+
+    if args.auth == "device":
+        print("Acquiring token via device code flow ...")
+        token = acquire_token_device_flow(args.client_id, args.tenant_id)
+    else:
+        print("Acquiring token interactively ...")
+        token = acquire_token_interactive(args.client_id, args.tenant_id)
+
+    if args.output:
+        Path(args.output).write_text(token, encoding="utf-8")
+        print(f"Token written to: {args.output}")
+    else:
+        print(f"\nToken:\n{token}")
+
+
 # ── setup ──────────────────────────────────────────────────────────────────────
 
 def cmd_setup(args):
     corpus_path = Path(args.corpus)
     output_path = Path(args.output)
-    repo_root   = corpus_path.parent.parent.parent  # Tests/Corpus/corpus.yaml → repo root
+    repo_root   = corpus_path.parent.parent
 
     print(f"Loading scenario: {corpus_path}")
     with corpus_path.open(encoding="utf-8") as f:
@@ -47,7 +72,6 @@ def cmd_setup(args):
 
     client = make_client(args.token)
 
-    # Ensure all required folders
     folder_path = (setup_cfg.get("ensure_folders") or ["TestCorpus/Mail"])[0]
     print(f"\nEnsuring folder: {folder_path}")
     folder_id = ensure_folder(client, args.mailbox, folder_path)
@@ -109,63 +133,95 @@ def cmd_teardown(args):
     with manifest_path.open(encoding="utf-8") as f:
         manifest = json.load(f)
 
-    client   = make_client(args.token)
-    mailbox  = manifest["mailbox"]
-    folder   = manifest["folder"]
+    client  = make_client(args.token)
+    mailbox = manifest["mailbox"]
+    folder  = manifest["folder"]
 
     print(f"Teardown: {folder} in {mailbox}")
-    # Resolve folder id then delete all messages
-    from .graph import ensure_folder
     folder_id = ensure_folder(client, mailbox, folder)
     deleted = clear_folder(client, mailbox, folder_id)
     print(f"  deleted {deleted} messages")
 
 
-# ── argument parsing ───────────────────────────────────────────────────────────
+# ── shared argument helpers ────────────────────────────────────────────────────
 
-def _common_auth(parser):
+def _add_auth_args(parser):
     parser.add_argument("--auth",      default="token", choices=["token", "interactive", "device"],
-                        help="Auth mode: 'token' (env/flag), 'interactive' (MSAL browser), 'device' (device code — for WSL/headless)")
-    parser.add_argument("--token",     default=os.environ.get("CORPUS_TOKEN"),     help="Bearer token (auth=token)")
-    parser.add_argument("--client-id", default=os.environ.get("CORPUS_CLIENT_ID"), help="App registration client ID (auth=interactive)")
-    parser.add_argument("--tenant-id", default=os.environ.get("CORPUS_TENANT_ID", "consumers"), help="Tenant ID or 'consumers' (auth=interactive)")
-    parser.add_argument("--mailbox",   default=os.environ.get("CORPUS_MAILBOX"),   help="Mailbox email")
+                        help="Auth mode: token | interactive | device (WSL/headless)")
+    parser.add_argument("--token",     default=os.environ.get("CORPUS_TOKEN"),
+                        help="Bearer token (auth=token)")
+    parser.add_argument("--client-id", default=os.environ.get("CORPUS_CLIENT_ID"),
+                        help="App registration client ID (auth=interactive|device)")
+    parser.add_argument("--tenant-id", default=os.environ.get("CORPUS_TENANT_ID", "consumers"),
+                        help="Tenant ID or 'consumers' (default: consumers)")
 
+
+def _resolve_token(args) -> str:
+    """Acquire or validate token based on --auth mode. Returns bearer token string."""
+    if args.auth in ("interactive", "device"):
+        if not args.client_id:
+            print("ERROR: --client-id or CORPUS_CLIENT_ID is required", file=sys.stderr)
+            sys.exit(1)
+        if args.auth == "device":
+            print("Acquiring token via device code flow ...")
+            return acquire_token_device_flow(args.client_id, args.tenant_id)
+        else:
+            print("Acquiring token interactively ...")
+            return acquire_token_interactive(args.client_id, args.tenant_id)
+    elif args.token:
+        return args.token
+    else:
+        print("ERROR: --token or CORPUS_TOKEN is required (or use --auth device|interactive)",
+              file=sys.stderr)
+        sys.exit(1)
+
+
+# ── argument parsing ───────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
         prog="cpmf-lo365om-corpus",
-        description="LatentLithium corpus setup / teardown",
+        description="LatchedLO365om corpus setup / teardown",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    # auth
+    p_auth = sub.add_parser("auth", help="Acquire and cache a bearer token")
+    p_auth.add_argument("--auth", default="device", choices=["interactive", "device"],
+                        help="Auth mode: device (default, WSL/headless) | interactive")
+    p_auth.add_argument("--client-id", default=os.environ.get("CORPUS_CLIENT_ID"),
+                        help="App registration client ID")
+    p_auth.add_argument("--tenant-id", default=os.environ.get("CORPUS_TENANT_ID", "consumers"),
+                        help="Tenant ID or 'consumers'")
+    p_auth.add_argument("--output", default=None,
+                        help="Write token to file instead of stdout")
+
     # setup
     p_setup = sub.add_parser("setup", help="Create corpus messages and write manifest")
-    p_setup.add_argument("--corpus", default="Tests/Corpus/corpus.yaml", help="Path to scenario yaml")
-    p_setup.add_argument("--output", default="Tests/Corpus/corpus.json",  help="Path to write corpus.json")
-    _common_auth(p_setup)
+    p_setup.add_argument("--corpus", default="scenarios/mail-demo.yaml",
+                         help="Path to scenario yaml")
+    p_setup.add_argument("--output", default="corpus.json",
+                         help="Path to write corpus.json")
+    p_setup.add_argument("--mailbox", default=os.environ.get("CORPUS_MAILBOX"),
+                         help="Mailbox email")
+    _add_auth_args(p_setup)
 
     # teardown
     p_tear = sub.add_parser("teardown", help="Delete corpus messages based on manifest")
-    p_tear.add_argument("--manifest", default="Tests/Corpus/corpus.json", help="Path to corpus.json")
-    _common_auth(p_tear)
+    p_tear.add_argument("--manifest", default="corpus.json",
+                        help="Path to corpus.json")
+    p_tear.add_argument("--mailbox", default=os.environ.get("CORPUS_MAILBOX"),
+                        help="Mailbox email (overrides manifest value)")
+    _add_auth_args(p_tear)
 
     args = parser.parse_args()
 
-    # Resolve token
-    if args.auth in ("interactive", "device"):
-        if not args.client_id:
-            print("ERROR: --client-id or CORPUS_CLIENT_ID is required for interactive/device auth", file=sys.stderr)
-            sys.exit(1)
-        if args.auth == "device":
-            print("Acquiring token via device code flow ...")
-            args.token = acquire_token_device_flow(args.client_id, args.tenant_id)
-        else:
-            print("Acquiring token interactively ...")
-            args.token = acquire_token_interactive(args.client_id, args.tenant_id)
-    elif not args.token:
-        print("ERROR: --token or CORPUS_TOKEN is required (or use --auth interactive)", file=sys.stderr)
-        sys.exit(1)
+    if args.command == "auth":
+        cmd_auth(args)
+        return
+
+    # setup / teardown both need a resolved token and mailbox
+    args.token = _resolve_token(args)
 
     if not args.mailbox:
         print("ERROR: --mailbox or CORPUS_MAILBOX is required", file=sys.stderr)
