@@ -10,6 +10,7 @@ from fpdf import FPDF
 from openpyxl import Workbook
 
 from .context import t
+from .generators.ntfs_cases import resolve as ntfs_resolve
 
 CONTENT_TYPE_MAP = {
     ".txt":  "text/plain",
@@ -73,10 +74,25 @@ def gen_fixture(spec: dict, repo_root: Path) -> bytes:
     return path.read_bytes()
 
 
+def resolve_name(value, ctx: dict) -> tuple[str, str | None]:
+    """Resolve an attachment name spec to (raw_name, expected_name).
+
+    - Plain string or template → (t(value, ctx), None)
+    - Strategy dict → dispatch to generator; returns (raw, expected) or (raw, None)
+    """
+    if isinstance(value, dict):
+        strategy = value.get("strategy")
+        if strategy == "ntfs_edge_case":
+            raw, expected = ntfs_resolve(value)
+            return raw, expected
+        raise ValueError(f"Unknown name generation strategy: {strategy!r}")
+    return t(value, ctx), None
+
+
 def build_attachment(att_spec: dict, ctx: dict, repo_root: Path) -> dict:
     """Build a Graph API fileAttachment dict from an attachment spec."""
     strategy = att_spec["strategy"]
-    name = t(att_spec["name"], ctx)
+    name, _ = resolve_name(att_spec["name"], ctx)
     ext = Path(name).suffix.lower()
     content_type = CONTENT_TYPE_MAP.get(ext) or guess_type(name)[0] or "application/octet-stream"
 

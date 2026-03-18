@@ -1,5 +1,6 @@
 """Build corpus.json manifest from resolved spec + Graph responses."""
 
+from .attachments import resolve_name
 from .body import extract_structured_fields, get_separator
 from .context import t
 
@@ -36,6 +37,14 @@ def build_manifest(
         structured_fields = extract_structured_fields(body_spec, ctx) if body_spec else {}
         separator = get_separator(body_spec) if body_spec else ": "
 
+        attachment_entries = []
+        for att in msg_spec.get("attachments", []):
+            raw, expected_name = resolve_name(att.get("name", ""), ctx)
+            entry = {"raw_name": raw}
+            if expected_name is not None:
+                entry["expected_name"] = expected_name
+            attachment_entries.append(entry)
+
         messages_out[label] = {
             "immutableId":  immutable_id,
             "subject":      t(msg_spec["subject"], ctx),
@@ -44,6 +53,7 @@ def build_manifest(
                 "separator":        separator,
                 "structuredFields": structured_fields,
             },
+            "attachments": attachment_entries,
             "expected": expected_spec.get(label, {}),
         }
 
