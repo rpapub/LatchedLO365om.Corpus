@@ -1,0 +1,390 @@
+# Tests/Corpus/corpus.schema.yaml
+# Human-readable schema for scenario yaml files (corpus.yaml, corpus-*.yaml).
+# Describes every key, its type, whether it is required, and its meaning.
+# This file is documentation — it is not machine-enforced at runtime.
+
+# ── Template variables ────────────────────────────────────────────────────────
+# The following tokens are substituted in any string value across the yaml
+# (subject, body content, attachment names, xlsx cells, pdf text, etc.).
+#
+#   {run_id}         string   UUID generated once per corpus setup run
+#   {run_id_short}   string   First 8 characters of {run_id}
+#   {timestamp}      string   ISO-8601 UTC datetime of corpus setup run
+#   {date}           string   Date portion of {timestamp}, format YYYYMMDD
+#   {label}          string   The label of the current fixture entry
+#   {index}          integer  0-based position of the entry in its parent list
+#   {row_index}      integer  0-based row position within an xlsx sheet
+#                             (only valid inside sheets[].row_template)
+
+# ── Value generation strategies ───────────────────────────────────────────────
+# Any string field value may be replaced with a generation spec dict:
+#
+#   value:
+#     strategy: faker          # only supported strategy currently
+#     method: company          # any Faker provider attribute (e.g. name, email, company)
+#     locale: de_DE            # optional, defaults to en_US
+#     seed: 42                 # optional integer — makes generation reproducible
+#
+# Resolved values are written verbatim into corpus.json so test assertions
+# are deterministic even when faker is used.
+
+# ── Top-level blocks ──────────────────────────────────────────────────────────
+
+schema:
+
+  scenario:
+    required: true
+    description: >
+      Identifies the scenario. Written into corpus.json for traceability.
+    keys:
+      name:
+        type: string
+        required: true
+        description: >
+          Stable, human-readable scenario identifier.
+          Convention: kebab-case (e.g. "mail-basic", "mail-eml").
+      workload:
+        type: enum
+        values: [mail, files]
+        required: true
+        description: >
+          Resource type being tested. Determines which fixture types are valid
+          and which Graph API endpoints are used during setup.
+
+  fixtures:
+    required: true
+    description: >
+      Declarative test data, grouped by workload type. The setup script creates
+      each declared fixture in the target environment.
+    keys:
+
+      mail:
+        type: list
+        required: false
+        default: []
+        description: >
+          Ordered list of mail message fixtures to create via
+          Graph POST /users/{mailbox}/mailFolders/{folder}/messages.
+
+        item_keys:
+
+          label:
+            type: string
+            required: true
+            description: >
+              Stable identifier for this fixture within the scenario.
+              Used as key in corpus.json and as the {label} template variable.
+              Convention: UPPER_SNAKE_CASE prefixed with MSG_.
+
+          subject:
+            type: string
+            required: true
+            description: >
+              Email subject line. Template variables are substituted.
+              Convention: prefix with "LL [{run_id_short}]" for easy mailbox identification.
+
+          body:
+            required: true
+            description: >
+              Mail body definition. Three forms are supported:
+
+              1. Null — no body:
+                   body: null
+
+              2. Raw shorthand — for fixtures that don't need extraction testing:
+                   body:
+                     contentType: text | html
+                     content: "string, supports {template} variables"
+
+              3. Compositional sections — for structured body content:
+                   body:
+                     contentType: text | html
+                     sections:
+                       - type: header | footer | structured
+                         ...
+            keys:
+              contentType:
+                type: enum
+                values: [text, html]
+                required: false
+                default: text
+                description: MIME content type of the body.
+              content:
+                type: string
+                required: false
+                description: >
+                  Raw body content. Mutually exclusive with sections[].
+                  Template variables are substituted.
+              sections:
+                type: list
+                required: false
+                description: >
+                  Ordered list of body sections rendered in sequence.
+                  Mutually exclusive with content.
+                item_keys:
+                  type:
+                    type: enum
+                    values: [header, footer, structured]
+                    required: true
+                    description: >
+                      Section type:
+                        header    — raw text prepended to the body
+                        footer    — raw text appended to the body
+                        structured — key-value pairs with configurable separator
+                  content:
+                    type: string
+                    required: true when type = header or footer
+                    description: >
+                      Raw text for header/footer sections.
+                      Template variables are substituted.
+                  separator:
+                    type: string
+                    required: false
+                    default: ": "
+                    description: >
+                      Delimiter between key and value in a structured section.
+                      Stored in corpus.json so test XAML can configure
+                      BodyFieldExtractor rules without re-parsing the body.
+                      Only valid when type = structured.
+                  fields:
+                    type: list
+                    required: true when type = structured
+                    description: Ordered list of key-value field definitions.
+                    item_keys:
+                      key:
+                        type: string
+                        required: true
+                        description: >
+                          Field key as it appears in the body text.
+                          Template variables are substituted.
+                      value:
+                        type: string or generation spec
+                        required: true
+                        description: >
+                          Field value. Either a plain string (template variables
+                          substituted) or a generation spec dict:
+                            value:
+                              strategy: faker
+                              method: company
+                              locale: de_DE   # optional
+                              seed: 42        # optional
+
+          importance:
+            type: enum
+            values: [low, normal, high]
+            required: false
+            default: normal
+            description: Graph message importance value.
+
+          isRead:
+            type: boolean
+            required: false
+            default: false
+            description: >
+              Whether the message is marked as read when created.
+              Set true to exercise isRead=true code paths.
+
+          attachments:
+            type: list
+            required: false
+            default: []
+            description: >
+              Ordered list of attachment definitions. Each item specifies a
+              generation strategy and its parameters.
+
+            item_keys:
+
+              strategy:
+                type: enum
+                required: true
+                values:
+                  - generate_text
+                  - generate_pdf
+                  - generate_xlsx
+                  - random_bytes
+                  - fixture_file
+                description: How the attachment content is produced.
+
+              name:
+                type: string or generation spec
+                required: true
+                description: >
+                  Filename as it appears in the email.
+                  Template variables are substituted.
+                  May also be a faker generation spec dict.
+
+              # ── strategy: generate_text ──────────────────────────────────
+              content:
+                type: string
+                required: true when strategy = generate_text
+                description: >
+                  UTF-8 text content. Template variables substituted.
+                  Supports multi-line via YAML block scalar (|).
+
+              # ── strategy: generate_pdf ───────────────────────────────────
+              pages:
+                type: list
+                required: true when strategy = generate_pdf
+                description: Ordered list of page definitions.
+                item_keys:
+                  title:
+                    type: string
+                    required: true
+                    description: Page heading. Template variables substituted.
+                  body:
+                    type: string
+                    required: true
+                    description: >
+                      Page body text. Template variables substituted.
+                      Newlines (\n) become line breaks.
+
+              # ── strategy: generate_xlsx ──────────────────────────────────
+              sheets:
+                type: list
+                required: true when strategy = generate_xlsx
+                description: Ordered list of sheet definitions.
+                item_keys:
+                  name:
+                    type: string
+                    required: true
+                    description: Sheet tab name. Template variables substituted.
+                  rows:
+                    type: list of lists
+                    required: false
+                    description: >
+                      Explicit rows. Mutually exclusive with row_template.
+                      Template variables substituted in every cell.
+                  headers:
+                    type: list of strings
+                    required: false
+                    description: Header row. Written as row 0.
+                  row_template:
+                    type: list of strings
+                    required: false
+                    description: >
+                      Template for generated rows. Requires row_count.
+                      {row_index} increments from 0 to row_count - 1.
+                  row_count:
+                    type: integer
+                    required: false
+                    description: Number of rows to generate from row_template.
+
+              # ── strategy: random_bytes ───────────────────────────────────
+              size_kb:
+                type: integer
+                required: true when strategy = random_bytes
+                description: Size of the generated file in kilobytes.
+
+              # ── strategy: fixture_file ───────────────────────────────────
+              path:
+                type: string
+                required: true when strategy = fixture_file
+                description: >
+                  Path to the source file relative to the repo root.
+                  File must be committed. No template substitution.
+
+          extension:
+            required: false
+            description: >
+              Optional OpenTypeExtension written to the message after creation.
+              Used to pre-populate workflow instance state for extension tests.
+            keys:
+              name:
+                type: string
+                required: true
+                description: >
+                  Extension name (extensionName in Graph API).
+                  Convention: reverse-DNS, e.g. "net.cprima.rpapub.latentlithium.testspec"
+              act:
+                type: dict
+                required: true
+                description: >
+                  Arbitrary key-value payload written as the extension body.
+                  Nested objects are JSON-serialised to a string before posting
+                  (Graph OpenTypeExtension does not reliably support nested objects
+                  on personal accounts).
+                  Template variables are substituted recursively.
+
+      files:
+        type: list
+        required: false
+        default: []
+        description: >
+          SharePoint / OneDrive file fixtures. Reserved for future use.
+          Shape TBD when SharePoint workload is implemented.
+
+  expected:
+    required: false
+    description: >
+      Observable outcomes per fixture label, written verbatim into corpus.json.
+      Test XAML reads the key(s) it cares about — unknown keys are ignored.
+
+      Keys within each label block are free-form strings. Soft conventions:
+
+        retrieval        Properties readable from the Graph message object
+                         (isRead, importance, hasAttachments)
+        bodyExtraction   BodyFieldExtractor output
+                         (values, unmatchedFields, missingRequiredKeys)
+        eml              SaveAllAsEml output (fileCount, minSizeBytes)
+        attachments      SaveAllAttachments output (count, minSizeBytes)
+        move_*           MoveMessage target folder expectations
+
+      Example:
+        expected:
+          MSG_FORM_BASIC:
+            retrieval:
+              isRead: false
+              importance: normal
+            bodyExtraction:
+              values:
+                emailaddress: "alice@example.com"
+              unmatchedFields: ["unknownfield"]
+              missingRequiredKeys: []
+            eml:
+              fileCount: 1
+              minSizeBytes: 512
+
+  execution:
+    required: false
+    description: Setup and teardown policy for the scenario.
+    keys:
+      setup:
+        keys:
+          ensure_folders:
+            type: list of strings
+            required: false
+            description: >
+              Mailbox folder paths to create if absent before message creation.
+              Use forward slashes for nested folders: "TestCorpus/Mail/Processed".
+              All declared folders are created; their IDs are stored in corpus.json.
+          idempotent:
+            type: boolean
+            required: false
+            default: true
+            description: >
+              If true, existing messages in the target folder are deleted before
+              creating new ones. Ensures a clean, reproducible corpus on every run.
+      teardown:
+        keys:
+          policy:
+            type: enum
+            values: [delete, keep]
+            required: false
+            default: delete
+            description: >
+              delete — remove all corpus messages after tests complete.
+              keep   — leave messages in place for manual inspection.
+
+  tests:
+    type: list of strings
+    required: false
+    description: >
+      Names of UiPath test cases that depend on this scenario.
+      Documentation only — not processed by the setup script.
+      Enables future tooling to select or report tests by scenario.
+
+      Example:
+        tests:
+          - Mail_GetMessages
+          - Mail_ExtractBodyFields
+          - Mail_SaveAllAsEml
