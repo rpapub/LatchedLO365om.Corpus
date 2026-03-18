@@ -72,12 +72,20 @@ def cmd_setup(args):
 
     client = make_client(args.token)
 
-    folder_path = (setup_cfg.get("ensure_folders") or ["TestCorpus/Mail"])[0]
-    print(f"\nEnsuring folder: {folder_path}")
-    folder_id = ensure_folder(client, args.mailbox, folder_path)
+    # Ensure all declared folders; store path → folder_id
+    folder_paths = setup_cfg.get("ensure_folders") or ["TestCorpus/Mail"]
+    folders: dict[str, str] = {}
+    print()
+    for fp in folder_paths:
+        print(f"Ensuring folder: {fp}")
+        folders[fp] = ensure_folder(client, args.mailbox, fp)
+
+    # Messages are created in the first declared folder
+    primary_folder_path = folder_paths[0]
+    primary_folder_id   = folders[primary_folder_path]
 
     print("\nClearing existing messages...")
-    deleted = clear_folder(client, args.mailbox, folder_id)
+    deleted = clear_folder(client, args.mailbox, primary_folder_id)
     print(f"  deleted {deleted} messages")
 
     messages_created = []
@@ -89,7 +97,7 @@ def cmd_setup(args):
         ctx   = make_context(run_id, timestamp, date, label=label, index=i)
         print(f"  [{i:02d}] {label} ...", end=" ", flush=True)
 
-        msg_id = create_message(client, args.mailbox, folder_id, msg_spec, ctx, repo_root)
+        msg_id = create_message(client, args.mailbox, primary_folder_id, msg_spec, ctx, repo_root)
 
         if "extension" in msg_spec:
             write_extension(client, args.mailbox, msg_id, msg_spec["extension"], ctx)
@@ -102,6 +110,7 @@ def cmd_setup(args):
             "immutable_id": msg_id,
             "msg_spec":     msg_spec,
             "ctx":          ctx,
+            "folder_path":  primary_folder_path,
         })
 
     manifest = build_manifest(
@@ -109,7 +118,7 @@ def cmd_setup(args):
         timestamp=timestamp,
         mailbox=args.mailbox,
         workload=workload,
-        folder_path=folder_path,
+        folders=folders,
         messages_created=messages_created,
         expected_spec=expected,
     )
@@ -135,12 +144,22 @@ def cmd_teardown(args):
 
     client  = make_client(args.token)
     mailbox = manifest["mailbox"]
-    folder  = manifest["folder"]
+    folders = manifest.get("folders", {})
 
-    print(f"Teardown: {folder} in {mailbox}")
-    folder_id = ensure_folder(client, mailbox, folder)
-    deleted = clear_folder(client, mailbox, folder_id)
-    print(f"  deleted {deleted} messages")
+    # Backward compat: old manifests had a single "folder" key
+    if not folders and "folder" in manifest:
+        folders = {manifest["folder"]: None}
+
+    total_deleted = 0
+    for folder_path, folder_id in folders.items():
+        print(f"Teardown: {folder_path} in {mailbox}")
+        if not folder_id:
+            folder_id = ensure_folder(client, mailbox, folder_path)
+        deleted = clear_folder(client, mailbox, folder_id)
+        total_deleted += deleted
+        print(f"  deleted {deleted} messages")
+
+    print(f"Total deleted: {total_deleted}")
 
 
 # ── shared argument helpers ────────────────────────────────────────────────────
