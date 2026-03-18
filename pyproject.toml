@@ -19,5 +19,15 @@ dependencies = [
 [project.scripts]
 cpmf-lo365om-corpus = "cpmf_lo365om_corpus.cli:main"
 
+[project.optional-dependencies]
+tests = ["pytest", "pytest-cov"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/cpmf_lo365om_corpus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-ra -q --cov=cpmf_lo365om_corpus --cov-report=term-missing"
+markers   = [
+    "integration: requires live M365 token + mailbox (skip with -m 'not integration')",
+]
