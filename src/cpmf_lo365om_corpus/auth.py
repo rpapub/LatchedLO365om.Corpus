@@ -22,7 +22,8 @@ from pathlib import Path
 import msal
 from msal_extensions import build_encrypted_persistence, PersistedTokenCache
 
-SCOPES = ["https://graph.microsoft.com/Mail.ReadWrite"]
+SCOPES_READ  = ["https://graph.microsoft.com/Mail.Read"]
+SCOPES_WRITE = ["https://graph.microsoft.com/Mail.ReadWrite"]
 
 _LIBRARY_NAME = "cpmf-lo365om-corpus"
 
@@ -56,7 +57,8 @@ def _make_cache() -> msal.SerializableTokenCache | PersistedTokenCache:
         return msal.SerializableTokenCache()  # in-memory only, never touches disk
 
 
-def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> str:
+def acquire_token_interactive(client_id: str, tenant_id: str = "consumers",
+                              write: bool = False) -> str:
     """
     Acquire a Graph API bearer token via MSAL interactive browser flow.
 
@@ -67,11 +69,13 @@ def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> s
         client_id:  Azure AD app registration client ID.
         tenant_id:  Tenant ID or 'consumers' (personal accounts) /
                     'organizations' / 'common'. Defaults to 'consumers'.
+        write:      Request Mail.ReadWrite scope (default: Mail.Read only).
 
     Returns:
         Bearer token string.
     """
-    cache = _make_cache()
+    scopes = SCOPES_WRITE if write else SCOPES_READ
+    cache  = _make_cache()
 
     app = msal.PublicClientApplication(
         client_id=client_id,
@@ -83,11 +87,11 @@ def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> s
     result = None
     if accounts:
         print(f"  Attempting silent token refresh for {accounts[0]['username']} ...")
-        result = app.acquire_token_silent(SCOPES, account=accounts[0])
+        result = app.acquire_token_silent(scopes, account=accounts[0])
 
     if not result:
         print("  Opening browser for interactive sign-in ...")
-        result = app.acquire_token_interactive(scopes=SCOPES)
+        result = app.acquire_token_interactive(scopes=scopes)
 
     if "access_token" not in result:
         error = result.get("error_description") or result.get("error") or str(result)
@@ -97,7 +101,8 @@ def acquire_token_interactive(client_id: str, tenant_id: str = "consumers") -> s
     return result["access_token"]
 
 
-def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers") -> str:
+def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers",
+                              write: bool = False) -> str:
     """
     Acquire a Graph API bearer token via MSAL device code flow.
 
@@ -110,11 +115,13 @@ def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers") -> s
     Args:
         client_id:  Azure AD app registration client ID.
         tenant_id:  Tenant ID or 'consumers' / 'organizations' / 'common'.
+        write:      Request Mail.ReadWrite scope (default: Mail.Read only).
 
     Returns:
         Bearer token string.
     """
-    cache = _make_cache()
+    scopes = SCOPES_WRITE if write else SCOPES_READ
+    cache  = _make_cache()
 
     app = msal.PublicClientApplication(
         client_id=client_id,
@@ -126,10 +133,10 @@ def acquire_token_device_flow(client_id: str, tenant_id: str = "consumers") -> s
     result = None
     if accounts:
         print(f"  Attempting silent token refresh for {accounts[0]['username']} ...")
-        result = app.acquire_token_silent(SCOPES, account=accounts[0])
+        result = app.acquire_token_silent(scopes, account=accounts[0])
 
     if not result:
-        flow = app.initiate_device_flow(scopes=SCOPES)
+        flow = app.initiate_device_flow(scopes=scopes)
         if "user_code" not in flow:
             raise RuntimeError(f"Device flow initiation failed: {flow.get('error_description')}")
         print()

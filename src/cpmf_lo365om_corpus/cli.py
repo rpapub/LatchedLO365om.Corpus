@@ -142,8 +142,10 @@ def cmd_teardown(args):
     with manifest_path.open(encoding="utf-8") as f:
         manifest = json.load(f)
 
+    mailbox = args.mailbox or manifest["mailbox"]
+    _confirm_write_access(mailbox)
+
     client  = make_client(args.token)
-    mailbox = manifest["mailbox"]
     folders = manifest.get("folders", {})
 
     # Backward compat: old manifests had a single "folder" key
@@ -175,7 +177,17 @@ def _add_auth_args(parser):
                         help="Tenant ID or 'consumers' (default: consumers)")
 
 
-def _resolve_token(args) -> str:
+def _confirm_write_access(mailbox: str) -> None:
+    """Gate destructive operations — user must type the mailbox address to proceed."""
+    print(f"\n  This operation will modify the mailbox: {mailbox}")
+    print(f"  Type the mailbox address to confirm: ", end="", flush=True)
+    entered = input().strip()
+    if entered != mailbox:
+        print("Confirmation failed — aborting.")
+        sys.exit(1)
+
+
+def _resolve_token(args, write: bool = False) -> str:
     """Acquire or validate token based on --auth mode. Returns bearer token string."""
     if args.auth in ("interactive", "device"):
         if not args.client_id:
@@ -183,10 +195,10 @@ def _resolve_token(args) -> str:
             sys.exit(1)
         if args.auth == "device":
             print("Acquiring token via device code flow ...")
-            return acquire_token_device_flow(args.client_id, args.tenant_id)
+            return acquire_token_device_flow(args.client_id, args.tenant_id, write=write)
         else:
             print("Acquiring token interactively ...")
-            return acquire_token_interactive(args.client_id, args.tenant_id)
+            return acquire_token_interactive(args.client_id, args.tenant_id, write=write)
     elif args.token:
         return args.token
     else:
@@ -239,14 +251,14 @@ def main():
         cmd_auth(args)
         return
 
-    # setup / teardown both need a resolved token and mailbox
-    args.token = _resolve_token(args)
-
-    if not args.mailbox:
-        print("ERROR: --mailbox or CORPUS_MAILBOX is required", file=sys.stderr)
-        sys.exit(1)
+    # setup / teardown both need a resolved token
+    args.token = _resolve_token(args, write=True)
 
     if args.command == "setup":
+        if not args.mailbox:
+            print("ERROR: --mailbox or CORPUS_MAILBOX is required", file=sys.stderr)
+            sys.exit(1)
+        _confirm_write_access(args.mailbox)
         cmd_setup(args)
     elif args.command == "teardown":
         cmd_teardown(args)
