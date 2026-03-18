@@ -5,8 +5,24 @@ build-backend = "hatchling.build"
 [project]
 name = "cpmf-lo365om-corpus"
 dynamic = ["version"]
-description = "LatentLithium corpus setup — test fixture creation for LatchedLO365om"
+description = "Test corpus setup for LatchedLO365om — creates M365 fixture messages via Graph API"
+readme = "README.md"
+license = { file = "LICENSE.md" }
+authors = [
+    { name = "Christian Prior-Mamulyan", email = "cprior@gmail.com" },
+]
 requires-python = ">=3.11"
+keywords = ["uipath", "m365", "graph-api", "test-corpus", "rpa"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = [
     "httpx",
     "pyyaml",
@@ -19,14 +35,26 @@ dependencies = [
 [project.scripts]
 cpmf-lo365om-corpus = "cpmf_lo365om_corpus.cli:main"
 
-[project.optional-dependencies]
-tests = ["pytest", "pytest-cov"]
+[project.urls]
+Homepage = "https://github.com/rpapub/LatchedLO365om.Corpus"
+Repository = "https://github.com/rpapub/LatchedLO365om.Corpus"
+Issues = "https://github.com/rpapub/LatchedLO365om.Corpus/issues"
 
 [tool.hatch.version]
 path = "src/cpmf_lo365om_corpus/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cpmf_lo365om_corpus"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "README.md", "LICENSE.md"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "twine>=6.0.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
